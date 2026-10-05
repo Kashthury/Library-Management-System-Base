@@ -6,7 +6,7 @@ import { studentsApi } from "../api/management/students";
 import type { Gender, Student, StudentInput } from "../types";
 import { formatCurrency } from "../utils/constants";
 
-const emptyForm: StudentInput = { studentName: "", age: 18, gender: "M", course: "" };
+const emptyForm: StudentInput = { studentName: "", age: 0, gender: "" as Gender, course: "" };
 
 export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -70,6 +70,7 @@ export default function Students() {
       setError("");
       if (!form.studentName.trim()) throw new Error("Student name is required");
       if (form.age <= 0) throw new Error("Age must be positive");
+      if (!form.gender) throw new Error("Gender is required");
       if (!form.course.trim()) throw new Error("Course is required");
 
       const action = modal === "add" ? "Added" : "Updated";
@@ -248,6 +249,7 @@ function StudentForm({ form, setForm, error, onSave, onCancel }: {
         <div className="form-field">
           <label>Gender</label>
           <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as Gender })}>
+            <option value="" disabled>Select gender</option>
             <option value="M">Male (M)</option>
             <option value="F">Female (F)</option>
           </select>

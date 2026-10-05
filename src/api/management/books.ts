@@ -1,18 +1,17 @@
 import type { Book, BookInput } from "../../types";
-import { copy, database, wait } from "./store";
+import { apiClient } from "../../lib/api";
+import { API_ENDPOINTS } from "../../utils/apiEndpoint";
 
 /** Book management API methods. */
 export const booksApi = {
-  async getAll(): Promise<Book[]> {
-    return wait(database.books.map(copy));
+  getAll(): Promise<Book[]> {
+    return apiClient.request<Book[]>(API_ENDPOINTS.books);
   },
 
-  async create(input: BookInput): Promise<Book> {
-    const book: Book = {
-      bookId: Math.max(0, ...database.books.map((item) => item.bookId)) + 1,
-      ...input,
-    };
-    database.books.push(book);
-    return wait(copy(book));
+  create(input: BookInput): Promise<Book> {
+    return apiClient.request<Book>(API_ENDPOINTS.books, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   },
 };

@@ -1,55 +1,43 @@
 import type { FineInput, Gender, Student, StudentInput } from "../../types";
-import { FINE_RULES } from "../../utils/constants";
-import { copy, database, findStudent, wait } from "./store";
+import { apiClient } from "../../lib/api";
+import { API_ENDPOINTS } from "../../utils/apiEndpoint";
 
 /** Student management API methods. */
 export const studentsApi = {
-  async getAll(): Promise<Student[]> {
-    return wait(database.students.map(copy));
+  getAll(): Promise<Student[]> {
+    return apiClient.request<Student[]>(API_ENDPOINTS.students);
   },
 
-  async getById(id: number): Promise<Student> {
-    return wait(copy(findStudent(id)));
+  getById(id: number): Promise<Student> {
+    return apiClient.request<Student>(API_ENDPOINTS.studentById(id));
   },
 
-  async getByGender(gender: Gender): Promise<Student[]> {
-    return wait(database.students.filter((student) => student.gender === gender).map(copy));
+  getByGender(gender: Gender): Promise<Student[]> {
+    return apiClient.request<Student[]>(API_ENDPOINTS.studentsByGender(gender));
   },
 
-  async create(input: StudentInput): Promise<Student> {
-    const student: Student = {
-      studentId: Math.max(0, ...database.students.map((item) => item.studentId)) + 1,
-      ...input,
-      fineAmount: 0,
-    };
-    database.students.push(student);
-    return wait(copy(student));
+  create(input: StudentInput): Promise<Student> {
+    return apiClient.request<Student>(API_ENDPOINTS.students, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   },
 
-  async update(id: number, input: StudentInput): Promise<Student> {
-    const student = findStudent(id);
-    Object.assign(student, input);
-    return wait(copy(student));
+  update(id: number, input: StudentInput): Promise<Student> {
+    return apiClient.request<Student>(API_ENDPOINTS.studentById(id), {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
   },
 
-  async remove(id: number): Promise<void> {
-    findStudent(id);
-    const hasActiveBorrow = database.borrowRecords.some(
-      (record) => record.studentId === id && record.returnDate === null && record.numberOfBooks > 0,
-    );
-    if (hasActiveBorrow) throw new Error("Cannot delete student with active borrow records");
-
-    database.students = database.students.filter((student) => student.studentId !== id);
-    database.borrowRecords = database.borrowRecords.filter((record) => record.studentId !== id);
-    return wait(undefined);
+  remove(id: number): Promise<void> {
+    return apiClient.request<void>(API_ENDPOINTS.studentById(id), { method: "DELETE" });
   },
 
-  async calculateFine(input: FineInput): Promise<Student> {
-    const student = findStudent(input.studentId);
-    if (input.lateDays < 0) throw new Error("Late days cannot be negative");
-    const rule = FINE_RULES.find(({ min, max }) => input.lateDays >= min && input.lateDays <= max);
-    if (!rule) throw new Error("Fine rule not found");
-    student.fineAmount = rule.amount;
-    return wait(copy(student));
+  calculateFine(input: FineInput): Promise<Student> {
+    return apiClient.request<Student>(API_ENDPOINTS.studentFine(input.studentId), {
+      method: "POST",
+      body: JSON.stringify({ lateDays: input.lateDays }),
+    });
   },
 };

@@ -43,7 +43,7 @@ export default function Layout({ activePage, onNavigate, children }: LayoutProps
       <main className="main-content">
         <header className="topbar">
           <span>LIBRARY MANAGEMENT SYSTEM</span>
-          <span className="mock-badge">MOCK DATA</span>
+          <span>LIBRARY APP</span>
         </header>
         <div className="content">{children}</div>
       </main>
