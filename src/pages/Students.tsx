@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Plus, Search, Trash2, DollarSign } from "lucide-react";
+import { Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Modal from "../components/common/Modal";
 import PageHeader from "../components/common/PageHeader";
 import { studentsApi } from "../api/management/students";
@@ -12,12 +12,11 @@ export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState("");
   const [gender, setGender] = useState<"ALL" | Gender>("ALL");
-  const [modal, setModal] = useState<"add" | "edit" | "fine" | "view" | "delete" | null>(null);
+  const [modal, setModal] = useState<"add" | "edit" | "view" | "delete" | null>(null);
   const [selected, setSelected] = useState<Student | null>(null);
   const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
   const [isLoadingStudent, setIsLoadingStudent] = useState(false);
   const [form, setForm] = useState<StudentInput>(emptyForm);
-  const [lateDays, setLateDays] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -108,19 +107,6 @@ export default function Students() {
     }
   };
 
-  const saveFine = async () => {
-    try {
-      setError("");
-      if (!selected) return;
-      const updated = await studentsApi.calculateFine({ studentId: selected.studentId, lateDays });
-      setStudents((current) => current.map((s) => s.studentId === updated.studentId ? updated : s));
-      setModal(null);
-      setSuccess("Successfully calculated student fine.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Fine calculation failed");
-    }
-  };
-
   return (
     <>
       <PageHeader
@@ -164,7 +150,6 @@ export default function Students() {
                     <div className="actions">
                       <button className="action-button" title="View Student" aria-label={`View ${student.studentName}`} onClick={() => openView(student.studentId)}><Eye size={16} /></button>
                       <button className="action-button" title="Edit" onClick={() => openEdit(student)}><Pencil size={16} /></button>
-                      <button className="action-button fine" title="Calculate Fine" onClick={() => { setSelected(student); setLateDays(0); setError(""); setModal("fine"); }}><DollarSign size={16} /></button>
                       <button className="action-button danger" title="Delete" onClick={() => { setSelected(student); setError(""); setModal("delete"); }}><Trash2 size={16} /></button>
                     </div>
                   </td>
@@ -207,23 +192,6 @@ export default function Students() {
         </div>
       </Modal>
 
-      <Modal open={modal === "fine"} title="Calculate Fine" width="small" onClose={() => setModal(null)}>
-        <div className="form-grid">
-          <div className="form-field">
-            <label>Student</label>
-            <input value={selected?.studentName ?? ""} disabled />
-          </div>
-          <div className="form-field">
-            <label>Number of Late Days</label>
-            <input type="number" min="0" value={lateDays} onChange={(e) => setLateDays(Number(e.target.value))} />
-          </div>
-        </div>
-        {error && <div className="error-message">{error}</div>}
-        <div className="modal-footer">
-          <button className="secondary-button" onClick={() => setModal(null)}>Cancel</button>
-          <button className="primary-button" onClick={saveFine}>Calculate Fine</button>
-        </div>
-      </Modal>
     </>
   );
 }

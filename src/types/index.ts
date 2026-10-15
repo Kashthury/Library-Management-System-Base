@@ -20,10 +20,13 @@ export interface Book {
 export interface BorrowRecord {
   borrowRecordId: number;
   borrowDate: string;
+  dueDate?: string | null;
   returnDate: string | null;
   numberOfBooks: number;
   studentId: number;
   bookId: number;
+  overdueDays?: number | null;
+  fineAmount?: number | null;
 }
 
 export interface StudentInput {
@@ -45,6 +48,7 @@ export interface BorrowInput {
   bookId: number;
   numberOfBooks: number;
   borrowDate?: string;
+  dueDate?: string;
   returnDate?: string;
 }
 

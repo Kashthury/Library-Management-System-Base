@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import Modal from "../components/common/Modal";
 import PageHeader from "../components/common/PageHeader";
 import { booksApi } from "../api/management/books";
@@ -9,6 +9,7 @@ const emptyBook: BookInput = { bookTitle: "", author: "", category: "", availabl
 
 export default function Books() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<BookInput>(emptyBook);
   const [error, setError] = useState("");
@@ -16,6 +17,10 @@ export default function Books() {
 
   const load = async () => setBooks(await booksApi.getAll());
   useEffect(() => { load(); }, []);
+
+  const filteredBooks = books.filter((book) =>
+    `${book.bookTitle} ${book.author} ${book.category}`.toLowerCase().includes(search.trim().toLowerCase())
+  );
 
   const save = async () => {
     try {
@@ -44,12 +49,19 @@ export default function Books() {
 
       {success && <div className="success-message" role="status">{success}</div>}
 
+      <div className="toolbar book-toolbar">
+        <div className="search-box book-search">
+          <Search size={18} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search book title, author or category..." aria-label="Search books by title, author, or category" />
+        </div>
+      </div>
+
       <div className="table-card">
         <div className="table-scroll">
           <table>
             <thead><tr><th>ID</th><th>Book Title</th><th>Author</th><th>Category</th><th>Available Quantity</th></tr></thead>
             <tbody>
-              {books.map((book) => (
+              {filteredBooks.map((book) => (
                 <tr key={book.bookId}>
                   <td>#{book.bookId}</td>
                   <td className="strong">{book.bookTitle}</td>
@@ -58,6 +70,7 @@ export default function Books() {
                   <td><span className={book.availableQuantity === 0 ? "stock-zero" : "stock"}>{book.availableQuantity}</span></td>
                 </tr>
               ))}
+              {filteredBooks.length === 0 && <tr><td colSpan={5} className="empty">No books match your search or category filter.</td></tr>}
             </tbody>
           </table>
         </div>

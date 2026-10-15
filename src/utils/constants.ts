@@ -9,4 +9,4 @@ export const FINE_RULES = [
 ];
 
 export const formatCurrency = (amount: number) =>
-  `Rs. ${amount.toLocaleString("en-LK")}`;
+  `Rs. ${amount?.toLocaleString("en-LK")}`;
