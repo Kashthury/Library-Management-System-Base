@@ -73,7 +73,7 @@ export default function Books() {
                   <td className="strong">{book.bookTitle}</td>
                   <td>{book.author}</td>
                   <td><span className="category-badge">{book.category}</span></td>
-                  <td><span className={book.availableQuantity === 0 ? "stock-zero" : "stock"}>{book.availableQuantity}</span></td>
+                  <td><span className={`table-value-badge ${book.availableQuantity > 0 ? "available-stock" : "warning"}`}>{book.availableQuantity ?? "—"}</span></td>
                 </tr>
               ))}
               {filteredBooks.length === 0 && <tr><td colSpan={5} className="empty">No books match your search or category filter.</td></tr>}

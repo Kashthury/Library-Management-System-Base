@@ -158,7 +158,7 @@ export default function Students() {
                   <td>{student.age}</td>
                   <td><span className={`gender-badge ${student.gender === "M" ? "male" : "female"}`}>{student.gender}</span></td>
                   <td>{student.course}</td>
-                  <td>{formatCurrency(student.fineAmount)}</td>
+                  <td><span className={`table-value-badge ${student.fineAmount != null && student.fineAmount > 0 ? "warning" : "neutral"}`}>{formatCurrency(student.fineAmount)}</span></td>
                   <td>
                     <div className="actions">
                       <button className="action-button" title="View Student" aria-label={`View ${student.studentName}`} onClick={() => openView(student.studentId)}><Eye size={16} /></button>
