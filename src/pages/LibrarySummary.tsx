@@ -6,17 +6,19 @@ import type { LibrarySummary as Summary } from "../types";
 
 export default function LibrarySummary() {
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [pageError, setPageError] = useState("");
 
   useEffect(() => {
-    librarySummaryApi.get().then(setSummary).catch(() => {
-      // Keep the summary layout visible while the backend is unavailable.
-    });
+    librarySummaryApi.get()
+      .then((response) => setSummary(response ?? null))
+      .catch((e: unknown) => setPageError(e instanceof Error ? e.message : String(e)));
   }, []);
 
   return (
     <>
       <PageHeader title="Library Summary" description="Dynamically calculated from current students, books and borrow records." />
 
+      {pageError && <div className="error-message" role="alert">{pageError}</div>}
       <div className="stats-grid">
         <StatCard label="Total Students" value={summary?.totalStudents ?? "—"} />
         <StatCard label="Male Students" value={summary?.totalMaleStudents ?? "—"} />

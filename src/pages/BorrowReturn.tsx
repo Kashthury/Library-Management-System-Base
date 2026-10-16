@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, Search } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, CornerDownLeft, Search } from "lucide-react";
 import Modal from "../components/common/Modal";
 import PageHeader from "../components/common/PageHeader";
 import { borrowReturnApi } from "../api/management/borrowReturn";
+import { ApiError } from "../lib/api";
 import type { Book, BorrowRecord, Student } from "../types";
 import { formatCurrency } from "../utils/constants";
 
@@ -24,29 +25,27 @@ export default function BorrowReturn() {
   const [dueDate, setDueDate] = useState("");
   const [returnDate, setReturnDate] = useState(getToday);
   const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const load = async () => {
     const [s, b, r] = await Promise.all([borrowReturnApi.getStudents(), borrowReturnApi.getBooks(), borrowReturnApi.getRecords()]);
-    setStudents(s); setBooks(b); setRecords(r);
+    setStudents(Array.isArray(s) ? s : []);
+    setBooks(Array.isArray(b) ? b : []);
+    setRecords(Array.isArray(r) ? r : []);
+    setPageError("");
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load().catch((e: unknown) => setPageError(e instanceof Error ? e.message : String(e))); }, []);
 
   const submit = async () => {
     try {
       setError("");
-      if (!studentId || !bookId) throw new Error("Student and book are required");
-      if (quantity <= 0) throw new Error("Number of books must be greater than 0");
-
-      if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Number of books must be a positive whole number");
+      setFieldErrors({});
 
       if (modal === "borrow") {
-        if (!borrowDate || !dueDate) throw new Error("Borrow date and due date are required");
-        if (dueDate < borrowDate) throw new Error("Due date cannot be earlier than borrow date");
         await borrowReturnApi.borrow({ studentId: Number(studentId), bookId: Number(bookId), numberOfBooks: quantity, borrowDate, dueDate });
       }
       else {
-        if (!returnDate) throw new Error("Return date is required");
-        if (selectedBorrow?.borrowDate && returnDate < selectedBorrow.borrowDate) throw new Error("Return date cannot be earlier than borrow date");
         await borrowReturnApi.return({ studentId: Number(studentId), bookId: Number(bookId), numberOfBooks: quantity, returnDate });
       }
 
@@ -54,7 +53,8 @@ export default function BorrowReturn() {
       setModal(null);
       setStudentId(""); setBookId(""); setQuantity(1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Operation failed");
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
+      setFieldErrors(e instanceof ApiError ? e.fieldErrors ?? {} : {});
     }
   };
 
@@ -89,6 +89,7 @@ export default function BorrowReturn() {
     setDueDate("");
     setReturnDate(getToday());
     setError("");
+    setFieldErrors({});
     setModal(mode);
   };
 
@@ -98,6 +99,7 @@ export default function BorrowReturn() {
     setQuantity(record.numberOfBooks);
     setReturnDate(getToday());
     setError("");
+    setFieldErrors({});
     setModal("return");
   };
 
@@ -114,6 +116,7 @@ export default function BorrowReturn() {
         }
       />
 
+      {pageError && <div className="error-message" role="alert">{pageError}</div>}
       <div className="info-strip">
         <span>Maximum books per student: <strong>5</strong></span>
         <span>Active borrow records: <strong>{activeRecords.length}</strong></span>
@@ -145,11 +148,11 @@ export default function BorrowReturn() {
                     <td>{record.borrowDate}</td>
                     <td>{record.dueDate ?? "Not provided by API"}</td>
                     <td>{record.returnDate ?? "—"}</td>
-                    <td>{record.overdueDays ?? (isActive ? "—" : "Not provided by API")}</td>
-                    <td>{record.fineAmount == null ? (isActive ? "—" : "Not provided by API") : formatCurrency(record.fineAmount)}</td>
-                    <td>{student ? formatCurrency(student.fineAmount) : "Not provided by API"}</td>
-                    <td>{record.numberOfBooks}</td>
-                    <td>{isActive ? <button className="secondary-button" onClick={() => openReturnForRecord(record)}>Return</button> : "Returned"}</td>
+                    <td><span className={`table-value-badge overdue ${record.overdueDays != null && record.overdueDays > 0 ? "warning" : "neutral"}`}>{record.overdueDays ?? (isActive ? "—" : "Not provided by API")}</span></td>
+                    <td><span className={`table-value-badge ${record.fineAmount != null && record.fineAmount > 0 ? "warning" : "neutral"}`}>{record.fineAmount == null ? (isActive ? "—" : "Not provided by API") : formatCurrency(record.fineAmount)}</span></td>
+                    <td><span className={`table-value-badge ${student && student.fineAmount > 0 ? "warning" : "neutral"}`}>{student ? formatCurrency(student.fineAmount) : "Not provided by API"}</span></td>
+                    <td><span className="table-value-badge quantity">{record.numberOfBooks}</span></td>
+                    <td>{isActive ? <button className="return-row-button" onClick={() => openReturnForRecord(record)}><CornerDownLeft size={14} aria-hidden="true" />Return</button> : <span className="borrow-status returned">Returned</span>}</td>
                   </tr>
                 );
               })}
@@ -169,34 +172,37 @@ export default function BorrowReturn() {
         <div className="form-grid">
           <div className="form-field full">
             <label>Student</label>
-            <select value={studentId} onChange={(e) => { setStudentId(e.target.value); setBookId(""); setQuantity(1); }}>
+            <select className={fieldErrors.studentId ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.studentId)} value={studentId} onChange={(e) => { setStudentId(e.target.value); setBookId(""); setQuantity(1); }}>
               <option value="">Select student</option>
               {(modal === "return" ? searchedReturnStudents : searchedStudents).map((s) => <option key={s.studentId} value={s.studentId}>#{s.studentId} - {s.studentName}</option>)}
             </select>
+            {fieldErrors.studentId && <span className="field-error">{fieldErrors.studentId}</span>}
           </div>
           <div className="form-field">
             <label>Book</label>
-            <select value={bookId} onChange={(e) => { setBookId(e.target.value); setQuantity(1); }}>
+            <select className={fieldErrors.bookId ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.bookId)} value={bookId} onChange={(e) => { setBookId(e.target.value); setQuantity(1); }}>
               <option value="">Select book</option>
               {(modal === "return" ? searchedReturnBooks : searchedBooks).map((b) => {
                 const borrowedCount = returnableRecords.find((record) => record.bookId === b.bookId)?.numberOfBooks;
                 return <option key={b.bookId} value={b.bookId}>#{b.bookId} - {b.bookTitle} ({modal === "return" ? `${borrowedCount} borrowed` : `${b.availableQuantity} available`})</option>;
               })}
             </select>
+            {fieldErrors.bookId && <span className="field-error">{fieldErrors.bookId}</span>}
           </div>
           <div className="form-field">
             <label>Number of Books</label>
-            <input type="number" min="1" max={modal === "return" ? selectedBorrow?.numberOfBooks ?? 1 : 5} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+            <input className={fieldErrors.numberOfBooks ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.numberOfBooks)} type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+            {fieldErrors.numberOfBooks && <span className="field-error">{fieldErrors.numberOfBooks}</span>}
           </div>
           {modal === "borrow" && <>
-            <div className="form-field"><label htmlFor="borrow-date">Borrow Date</label><input id="borrow-date" type="date" value={borrowDate} onChange={(e) => setBorrowDate(e.target.value)} required /></div>
-            <div className="form-field"><label htmlFor="due-date">Due Date</label><input id="due-date" type="date" min={borrowDate} value={dueDate} onChange={(e) => setDueDate(e.target.value)} required /></div>
+            <div className="form-field"><label htmlFor="borrow-date">Borrow Date</label><input className={fieldErrors.borrowDate ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.borrowDate)} id="borrow-date" type="date" value={borrowDate} onChange={(e) => setBorrowDate(e.target.value)} />{fieldErrors.borrowDate && <span className="field-error">{fieldErrors.borrowDate}</span>}</div>
+            <div className="form-field"><label htmlFor="due-date">Due Date</label><input className={fieldErrors.dueDate ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.dueDate)} id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />{fieldErrors.dueDate && <span className="field-error">{fieldErrors.dueDate}</span>}</div>
           </>}
           {modal === "return" && selectedBorrow && <div className="form-field full"><label>Due Date</label><input value={selectedBorrow.dueDate ?? "Not provided by API"} readOnly /></div>}
-          {modal === "return" && <div className="form-field full"><label htmlFor="return-date">Return Date</label><input id="return-date" type="date" min={selectedBorrow?.borrowDate} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} required /></div>}
+          {modal === "return" && <div className="form-field full"><label htmlFor="return-date">Return Date</label><input className={fieldErrors.returnDate ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.returnDate)} id="return-date" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />{fieldErrors.returnDate && <span className="field-error">{fieldErrors.returnDate}</span>}</div>}
           {modal === "return" && selectedBorrow?.fineAmount != null && <div className="form-field full"><label>Fine Recorded</label><input value={formatCurrency(selectedBorrow.fineAmount)} readOnly /></div>}
         </div>
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="error-message" role="alert">{error}</div>}
         <div className="modal-footer">
           <button className="secondary-button" onClick={() => setModal(null)}>Cancel</button>
           <button className="primary-button" onClick={submit}>{modal === "borrow" ? "Borrow Book" : "Return Book"}</button>

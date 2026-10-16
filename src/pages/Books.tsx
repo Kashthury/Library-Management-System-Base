@@ -3,6 +3,7 @@ import { Plus, Search } from "lucide-react";
 import Modal from "../components/common/Modal";
 import PageHeader from "../components/common/PageHeader";
 import { booksApi } from "../api/management/books";
+import { ApiError } from "../lib/api";
 import type { Book, BookInput } from "../types";
 
 const emptyBook: BookInput = { bookTitle: "", author: "", category: "", availableQuantity: 1 };
@@ -13,10 +14,16 @@ export default function Books() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<BookInput>(emptyBook);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState("");
+  const [pageError, setPageError] = useState("");
 
-  const load = async () => setBooks(await booksApi.getAll());
-  useEffect(() => { load(); }, []);
+  const load = async () => {
+    const response = await booksApi.getAll();
+    setBooks(Array.isArray(response) ? response : []);
+    setPageError("");
+  };
+  useEffect(() => { load().catch((e: unknown) => setPageError(e instanceof Error ? e.message : String(e))); }, []);
 
   const filteredBooks = books.filter((book) =>
     `${book.bookTitle} ${book.author} ${book.category}`.toLowerCase().includes(search.trim().toLowerCase())
@@ -24,18 +31,16 @@ export default function Books() {
 
   const save = async () => {
     try {
-      if (!form.bookTitle.trim()) throw new Error("Book title is required");
-      if (!form.author.trim()) throw new Error("Author is required");
-      if (!form.category.trim()) throw new Error("Category is required");
-      if (form.availableQuantity < 0) throw new Error("Available quantity cannot be negative");
       await booksApi.create(form);
       await load();
       setOpen(false);
       setForm(emptyBook);
       setError("");
+      setFieldErrors({});
       setSuccess("Successfully added book record.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Operation failed");
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
+      setFieldErrors(e instanceof ApiError ? e.fieldErrors ?? {} : {});
     }
   };
 
@@ -44,9 +49,10 @@ export default function Books() {
       <PageHeader
         title="Book Management"
         description="Register books and view the current library inventory."
-        action={<button className="primary-button" onClick={() => { setOpen(true); setError(""); }}><Plus size={18} /> Register Book</button>}
+        action={<button className="primary-button" onClick={() => { setOpen(true); setError(""); setFieldErrors({}); }}><Plus size={18} /> Register Book</button>}
       />
 
+      {pageError && <div className="error-message" role="alert">{pageError}</div>}
       {success && <div className="success-message" role="status">{success}</div>}
 
       <div className="toolbar book-toolbar">
@@ -78,10 +84,10 @@ export default function Books() {
 
       <Modal open={open} title="Register Book" onClose={() => setOpen(false)}>
         <div className="form-grid">
-          <div className="form-field full"><label>Book Title</label><input value={form.bookTitle} onChange={(e) => setForm({ ...form, bookTitle: e.target.value })} /></div>
-          <div className="form-field"><label>Author</label><input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} /></div>
-          <div className="form-field"><label>Category</label><input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
-          <div className="form-field"><label>Available Quantity</label><input type="number" min="0" value={form.availableQuantity} onChange={(e) => setForm({ ...form, availableQuantity: Number(e.target.value) })} /></div>
+          <div className="form-field full"><label>Book Title</label><input className={fieldErrors.bookTitle ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.bookTitle)} value={form.bookTitle} onChange={(e) => setForm({ ...form, bookTitle: e.target.value })} />{fieldErrors.bookTitle && <span className="field-error">{fieldErrors.bookTitle}</span>}</div>
+          <div className="form-field"><label>Author</label><input className={fieldErrors.author ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.author)} value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />{fieldErrors.author && <span className="field-error">{fieldErrors.author}</span>}</div>
+          <div className="form-field"><label>Category</label><input className={fieldErrors.category ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.category)} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />{fieldErrors.category && <span className="field-error">{fieldErrors.category}</span>}</div>
+          <div className="form-field"><label>Available Quantity</label><input className={fieldErrors.availableQuantity ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.availableQuantity)} type="number" value={form.availableQuantity} onChange={(e) => setForm({ ...form, availableQuantity: Number(e.target.value) })} />{fieldErrors.availableQuantity && <span className="field-error">{fieldErrors.availableQuantity}</span>}</div>
         </div>
         {error && <div className="error-message">{error}</div>}
         <div className="modal-footer">

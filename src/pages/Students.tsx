@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Modal from "../components/common/Modal";
 import PageHeader from "../components/common/PageHeader";
 import { studentsApi } from "../api/management/students";
+import { ApiError } from "../lib/api";
 import type { Gender, Student, StudentInput } from "../types";
 import { formatCurrency } from "../utils/constants";
 
 const emptyForm: StudentInput = { studentName: "", age: 0, gender: "" as Gender, course: "" };
+
+function normalizeGender(value: string): Gender {
+  return value.trim().toUpperCase().startsWith("F") ? "F" : "M";
+}
 
 export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -18,11 +23,17 @@ export default function Students() {
   const [isLoadingStudent, setIsLoadingStudent] = useState(false);
   const [form, setForm] = useState<StudentInput>(emptyForm);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState("");
+  const [pageError, setPageError] = useState("");
 
-  const load = async () => setStudents(await studentsApi.getAll());
+  const load = async () => {
+    const response = await studentsApi.getAll();
+    setStudents(Array.isArray(response) ? response : []);
+    setPageError("");
+  };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load().catch((e: unknown) => setPageError(e instanceof Error ? e.message : String(e))); }, []);
 
   const filtered = students.filter((s) =>
     (gender === "ALL" || s.gender === gender) &&
@@ -31,6 +42,7 @@ export default function Students() {
 
   const openAdd = () => {
     setError("");
+    setFieldErrors({});
     setSuccess("");
     setForm(emptyForm);
     setModal("add");
@@ -38,12 +50,13 @@ export default function Students() {
 
   const openEdit = (student: Student) => {
     setError("");
+    setFieldErrors({});
     setSuccess("");
     setSelected(student);
     setForm({
       studentName: student.studentName,
       age: student.age,
-      gender: student.gender,
+      gender: normalizeGender(student.gender),
       course: student.course,
     });
     setModal("edit");
@@ -58,7 +71,7 @@ export default function Students() {
     try {
       setViewingStudent(await studentsApi.getById(studentId));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load student");
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoadingStudent(false);
     }
@@ -67,10 +80,7 @@ export default function Students() {
   const saveStudent = async () => {
     try {
       setError("");
-      if (!form.studentName.trim()) throw new Error("Student name is required");
-      if (form.age <= 0) throw new Error("Age must be positive");
-      if (!form.gender) throw new Error("Gender is required");
-      if (!form.course.trim()) throw new Error("Course is required");
+      setFieldErrors({});
 
       const action = modal === "add" ? "Added" : "Updated";
       if (modal === "add") await studentsApi.create(form);
@@ -80,7 +90,8 @@ export default function Students() {
       setModal(null);
       setSuccess(`Successfully ${action} student record.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Operation failed");
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
+      setFieldErrors(e instanceof ApiError ? e.fieldErrors ?? {} : {});
     }
   };
 
@@ -94,7 +105,7 @@ export default function Students() {
       setSuccess("Successfully deleted student record.");
       setSelected(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -103,7 +114,8 @@ export default function Students() {
     if (value === "ALL") {
       await load();
     } else {
-      setStudents(await studentsApi.getByGender(value));
+      const response = await studentsApi.getByGender(value);
+      setStudents(Array.isArray(response) ? response : []);
     }
   };
 
@@ -115,6 +127,7 @@ export default function Students() {
         action={<button className="primary-button" onClick={openAdd}><Plus size={18} /> Register Student</button>}
       />
 
+      {pageError && <div className="error-message" role="alert">{pageError}</div>}
       <div className="toolbar student-toolbar">
         <div className="search-box student-search">
           <Search size={18} />
@@ -162,20 +175,20 @@ export default function Students() {
       </div>
 
       <Modal open={modal === "add" || modal === "edit"} title={modal === "add" ? "Register Student" : "Update Student"} onClose={() => setModal(null)}>
-        <StudentForm form={form} setForm={setForm} error={error} onSave={saveStudent} onCancel={() => setModal(null)} />
+        <StudentForm form={form} setForm={setForm} error={error} fieldErrors={fieldErrors} onSave={saveStudent} onCancel={() => setModal(null)} />
       </Modal>
 
       <Modal open={modal === "view"} title="Student Details" onClose={() => setModal(null)}>
         {isLoadingStudent && <div className="loading">Loading student...</div>}
         {error && <div className="error-message">{error}</div>}
         {viewingStudent && !isLoadingStudent && (
-          <div className="form-grid">
-            <div className="form-field"><label>Student ID</label><input value={viewingStudent.studentId} readOnly /></div>
-            <div className="form-field"><label>Student Name</label><input value={viewingStudent.studentName} readOnly /></div>
-            <div className="form-field"><label>Age</label><input value={viewingStudent.age} readOnly /></div>
-            <div className="form-field"><label>Gender</label><input value={viewingStudent.gender} readOnly /></div>
-            <div className="form-field full"><label>Course</label><input value={viewingStudent.course} readOnly /></div>
-            <div className="form-field"><label>Fine Amount</label><input value={formatCurrency(viewingStudent.fineAmount)} readOnly /></div>
+          <div className="student-details">
+            <div className="student-detail"><span>Student ID</span><b>:</b><strong>#{viewingStudent.studentId}</strong></div>
+            <div className="student-detail"><span>Student Name</span><b>:</b><strong>{viewingStudent.studentName}</strong></div>
+            <div className="student-detail"><span>Age</span><b>:</b><strong>{viewingStudent.age}</strong></div>
+            <div className="student-detail"><span>Gender</span><b>:</b><strong>{viewingStudent.gender === "M" ? "Male" : "Female"}</strong></div>
+            <div className="student-detail"><span>Course</span><b>:</b><strong>{viewingStudent.course}</strong></div>
+            <div className="student-detail"><span>Total Fine</span><b>:</b><strong>{formatCurrency(viewingStudent.fineAmount)}</strong></div>
           </div>
         )}
         <div className="modal-footer">
@@ -183,12 +196,18 @@ export default function Students() {
         </div>
       </Modal>
 
-      <Modal open={modal === "delete"} title="Confirm Delete" width="small" onClose={() => setModal(null)}>
-        <p>Delete {selected?.studentName}?</p>
-        {error && <div className="error-message">{error}</div>}
-        <div className="modal-footer">
+      <Modal open={modal === "delete"} title="Delete student record?" width="small" onClose={() => setModal(null)}>
+        <div className="delete-confirmation">
+          <div className="delete-confirmation-icon" aria-hidden="true"><AlertTriangle size={21} /></div>
+          <div className="delete-confirmation-copy">
+            <p>This will permanently remove <strong>{selected?.studentName}</strong> from the student records.</p>
+            <span>This action cannot be undone.</span>
+          </div>
+        </div>
+        {error && <div className="error-message" role="alert">{error}</div>}
+        <div className="modal-footer delete-confirmation-footer">
           <button className="secondary-button" onClick={() => setModal(null)}>Cancel</button>
-          <button className="primary-button" onClick={removeStudent}>Delete Student</button>
+          <button className="danger-button" onClick={removeStudent}><Trash2 size={16} /> Delete record</button>
         </div>
       </Modal>
 
@@ -196,10 +215,11 @@ export default function Students() {
   );
 }
 
-function StudentForm({ form, setForm, error, onSave, onCancel }: {
+function StudentForm({ form, setForm, error, fieldErrors, onSave, onCancel }: {
   form: StudentInput;
   setForm: React.Dispatch<React.SetStateAction<StudentInput>>;
   error: string;
+  fieldErrors: Record<string, string>;
   onSave: () => void;
   onCancel: () => void;
 }) {
@@ -208,23 +228,27 @@ function StudentForm({ form, setForm, error, onSave, onCancel }: {
       <div className="form-grid">
         <div className="form-field full">
           <label>Student Name</label>
-          <input value={form.studentName} onChange={(e) => setForm({ ...form, studentName: e.target.value })} />
+          <input className={fieldErrors.studentName ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.studentName)} value={form.studentName} onChange={(e) => setForm({ ...form, studentName: e.target.value })} />
+          {fieldErrors.studentName && <span className="field-error">{fieldErrors.studentName}</span>}
         </div>
         <div className="form-field">
           <label>Age</label>
-          <input type="number" min="1" value={form.age} onChange={(e) => setForm({ ...form, age: Number(e.target.value) })} />
+          <input className={fieldErrors.age ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.age)} type="number" value={form.age} onChange={(e) => setForm({ ...form, age: Number(e.target.value) })} />
+          {fieldErrors.age && <span className="field-error">{fieldErrors.age}</span>}
         </div>
         <div className="form-field">
           <label>Gender</label>
-          <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as Gender })}>
+          <select className={fieldErrors.gender ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.gender)} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as Gender })}>
             <option value="" disabled>Select gender</option>
             <option value="M">Male (M)</option>
             <option value="F">Female (F)</option>
           </select>
+          {fieldErrors.gender && <span className="field-error">{fieldErrors.gender}</span>}
         </div>
         <div className="form-field full">
           <label>Course</label>
-          <input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} />
+          <input className={fieldErrors.course ? "input-error" : ""} aria-invalid={Boolean(fieldErrors.course)} value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} />
+          {fieldErrors.course && <span className="field-error">{fieldErrors.course}</span>}
         </div>
       </div>
       {error && <div className="error-message">{error}</div>}
